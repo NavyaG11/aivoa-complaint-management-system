@@ -328,3 +328,58 @@ textarea.field-input { resize: vertical; font-family: 'Inter', sans-serif; }
   color: #9AA7B1;
   margin-top: 14px;
 }
+
+.duplicate-banner {
+  background: #FDEEEC;
+  border: 1px solid #F0C4BC;
+  color: var(--bad);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 18px;
+}
+
+.chat-history {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.chat-turn { font-size: 12.5px; }
+.chat-question { font-weight: 600; color: var(--ink); margin: 0 0 4px; }
+.chat-answer { color: var(--muted); margin: 0; line-height: 1.5; }
+
+.chat-input-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.chat-input {
+  flex: 1;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #FAFBFC;
+  outline: none;
+}
+
+.chat-input:focus { border-color: var(--accent-2); background: #fff; }
+
+.chat-send {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  width: 38px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.chat-send:disabled { opacity: 0.6; cursor: default; }

@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db import init_db, get_db, Complaint
-from app.graph import run_complaint_pipeline
+from app.graph import run_complaint_pipeline, answer_complaint_question
 
 app = FastAPI(title="AIVOA Complaint Intake API")
 
@@ -26,6 +26,11 @@ class ExtractRequest(BaseModel):
     raw_text: str
 
 
+class AskRequest(BaseModel):
+    question: str
+    complaint_context: dict
+
+
 class ComplaintIn(BaseModel):
     complaint_source: str = ""
     customer_name: str = ""
@@ -40,6 +45,7 @@ class ComplaintIn(BaseModel):
     description: str = ""
     initial_severity: str = ""
     priority: str = ""
+    possible_duplicate: str = "false"
 
 
 @app.get("/health")
@@ -48,20 +54,39 @@ def health():
 
 
 @app.post("/extract-complaint")
-def extract_complaint(payload: ExtractRequest):
+def extract_complaint(payload: ExtractRequest, db: Session = Depends(get_db)):
     """
     Takes raw complaint text (pasted email, document text, etc.) and returns
-    structured fields extracted by the LangGraph + Groq pipeline.
+    structured fields extracted by the LangGraph + Groq pipeline. Also passes
+    existing complaints in so the duplicate-check node can flag repeats.
     """
     if not payload.raw_text or not payload.raw_text.strip():
         raise HTTPException(status_code=400, detail="raw_text is empty")
 
+    existing = [
+        {"batch_number": c.batch_number, "product_name": c.product_name}
+        for c in db.query(Complaint).all()
+    ]
+
     try:
-        extracted = run_complaint_pipeline(payload.raw_text)
+        extracted = run_complaint_pipeline(payload.raw_text, existing_complaints=existing)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"AI extraction failed: {exc}")
 
     return {"extracted": extracted}
+
+
+@app.post("/ask-about-complaint")
+def ask_about_complaint(payload: AskRequest):
+    """Bonus feature: free-form Q&A about the complaint currently in the form,
+    powered by the assistant chat box in the UI."""
+    if not payload.question or not payload.question.strip():
+        raise HTTPException(status_code=400, detail="question is empty")
+    try:
+        answer = answer_complaint_question(payload.question, payload.complaint_context)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"Assistant failed: {exc}")
+    return {"answer": answer}
 
 
 @app.post("/complaints")

@@ -14,6 +14,8 @@ const emptyForm = {
   description: "",
   initial_severity: "",
   priority: "",
+  possible_duplicate: false,
+  duplicate_count: 0,
 };
 
 const complaintSlice = createSlice({

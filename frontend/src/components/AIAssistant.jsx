@@ -1,15 +1,34 @@
 import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { extractionStarted, extractionSucceeded, extractionFailed } from "../store/complaintSlice";
-import { extractComplaint } from "../api";
+import { extractComplaint, askAboutComplaint } from "../api";
 
 export default function AIAssistant() {
   const dispatch = useDispatch();
   const aiStatus = useSelector((s) => s.complaint.aiStatus);
   const aiError = useSelector((s) => s.complaint.aiError);
+  const form = useSelector((s) => s.complaint.form);
   const [pastedText, setPastedText] = useState("");
   const [showPaste, setShowPaste] = useState(false);
   const [fileName, setFileName] = useState(null);
+  const [chatQuestion, setChatQuestion] = useState("");
+  const [chatHistory, setChatHistory] = useState([]); // [{question, answer}]
+  const [chatLoading, setChatLoading] = useState(false);
+
+  const handleAsk = async () => {
+    const question = chatQuestion.trim();
+    if (!question) return;
+    setChatLoading(true);
+    setChatQuestion("");
+    try {
+      const answer = await askAboutComplaint(question, form);
+      setChatHistory((h) => [...h, { question, answer }]);
+    } catch (err) {
+      setChatHistory((h) => [...h, { question, answer: "Sorry, I couldn't answer that — check the backend is running." }]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
 
   const runExtraction = async (rawText) => {
     if (!rawText || !rawText.trim()) return;
@@ -114,6 +133,31 @@ export default function AIAssistant() {
             ? "Done — I've populated the form with what I found. Please review before saving."
             : "Upload a complaint document or paste text above. I will automatically extract the details and populate the form for you."}
         </p>
+      </div>
+
+      {chatHistory.length > 0 && (
+        <div className="chat-history">
+          {chatHistory.map((turn, i) => (
+            <div key={i} className="chat-turn">
+              <p className="chat-question">You: {turn.question}</p>
+              <p className="chat-answer">{turn.answer}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="chat-input-row">
+        <input
+          className="chat-input"
+          type="text"
+          placeholder="Ask me anything about this complaint..."
+          value={chatQuestion}
+          onChange={(e) => setChatQuestion(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleAsk()}
+        />
+        <button className="chat-send" onClick={handleAsk} disabled={chatLoading}>
+          {chatLoading ? "..." : "➤"}
+        </button>
       </div>
 
       <p className="disclaimer">AI responses may contain errors. Please verify information.</p>

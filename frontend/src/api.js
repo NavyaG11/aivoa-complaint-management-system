@@ -11,3 +11,11 @@ export async function saveComplaint(form) {
   const res = await axios.post(`${API_BASE}/complaints`, form);
   return res.data;
 }
+
+export async function askAboutComplaint(question, complaintContext) {
+  const res = await axios.post(`${API_BASE}/ask-about-complaint`, {
+    question,
+    complaint_context: complaintContext,
+  });
+  return res.data.answer;
+}

@@ -40,6 +40,7 @@ class Complaint(Base):
     description = Column(Text)
     initial_severity = Column(String(64))
     priority = Column(String(64))
+    possible_duplicate = Column(String(8), default="false")  # "true"/"false" - simple flag from the duplicate-check node
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 

@@ -27,6 +27,7 @@ class ComplaintState(TypedDict):
     raw_text: str
     extracted: Optional[dict]
     error: Optional[str]
+    existing_complaints: Optional[list]  # [{"batch_number": ..., "product_name": ...}, ...]
 
 
 def _get_llm():
@@ -116,27 +117,78 @@ def classify_severity(state: ComplaintState) -> ComplaintState:
         return {**state, "extracted": merged, "error": None}
 
 
+def check_duplicates(state: ComplaintState) -> ComplaintState:
+    """Bonus feature: flag if this complaint's batch number + product already
+    exists in the database, so QA can catch repeat reports of the same issue.
+    Pure Python matching (not an LLM call) - fast and deterministic, which is
+    the right tool for exact-match lookups like this."""
+    if state.get("error") or not state.get("extracted"):
+        return state
+
+    extracted = state["extracted"]
+    batch = (extracted.get("batch_number") or "").strip().lower()
+    product = (extracted.get("product_name") or "").strip().lower()
+    existing = state.get("existing_complaints") or []
+
+    matches = [
+        c for c in existing
+        if batch and product
+        and (c.get("batch_number") or "").strip().lower() == batch
+        and (c.get("product_name") or "").strip().lower() == product
+    ]
+
+    merged = {
+        **extracted,
+        "possible_duplicate": len(matches) > 0,
+        "duplicate_count": len(matches),
+    }
+    return {**state, "extracted": merged}
+
+
 def build_graph():
     graph = StateGraph(ComplaintState)
     graph.add_node("extract_fields", extract_fields)
     graph.add_node("classify_severity", classify_severity)
+    graph.add_node("check_duplicates", check_duplicates)
     graph.set_entry_point("extract_fields")
     graph.add_edge("extract_fields", "classify_severity")
-    graph.add_edge("classify_severity", END)
+    graph.add_edge("classify_severity", "check_duplicates")
+    graph.add_edge("check_duplicates", END)
     return graph.compile()
 
 
 _compiled_graph = None
 
 
-def run_complaint_pipeline(raw_text: str) -> dict:
+def run_complaint_pipeline(raw_text: str, existing_complaints: list | None = None) -> dict:
     global _compiled_graph
     if _compiled_graph is None:
         _compiled_graph = build_graph()
 
-    result = _compiled_graph.invoke({"raw_text": raw_text, "extracted": None, "error": None})
+    result = _compiled_graph.invoke({
+        "raw_text": raw_text,
+        "extracted": None,
+        "error": None,
+        "existing_complaints": existing_complaints or [],
+    })
 
     if result.get("error"):
         raise RuntimeError(result["error"])
 
     return result["extracted"]
+
+
+def answer_complaint_question(question: str, complaint_context: dict) -> str:
+    """Bonus feature: lets the assistant chat box answer free-form questions
+    about the complaint currently on screen (e.g. 'what's the risk here?')."""
+    llm = _get_llm()
+    prompt = (
+        "You are a QA assistant helping a reviewer understand a pharmaceutical "
+        "customer complaint. Answer the question in 2-4 concise sentences, "
+        "using only the complaint details given - if the details don't cover "
+        "the question, say so plainly instead of guessing.\n\n"
+        f"Complaint details:\n{json.dumps(complaint_context)}\n\n"
+        f"Question: {question}"
+    )
+    response = llm.invoke(prompt)
+    return response.content.strip()

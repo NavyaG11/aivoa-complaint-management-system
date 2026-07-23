@@ -38,7 +38,8 @@ export default function ComplaintForm() {
   const handleSave = async () => {
     dispatch(saveStarted());
     try {
-      await saveComplaint(form);
+      const payload = { ...form, possible_duplicate: form.possible_duplicate ? "true" : "false" };
+      await saveComplaint(payload);
       dispatch(saveSucceeded());
     } catch (err) {
       console.error(err);
@@ -55,6 +56,13 @@ export default function ComplaintForm() {
         </div>
         <span className="status-pill">Pending Triage</span>
       </div>
+
+      {form.possible_duplicate && (
+        <div className="duplicate-banner">
+          Possible duplicate — {form.duplicate_count} existing complaint(s) already
+          logged for this product + batch number. Please review before saving.
+        </div>
+      )}
 
       <div className="section">
         <h3>1. Origin &amp; Customer Details</h3>

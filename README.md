@@ -29,6 +29,20 @@ and stores it in the database.
 
 ## Setup
 
+### 0. Database — SQLite (default) or Postgres
+
+The project runs on SQLite out of the box, zero setup. To use real Postgres
+(the assignment's mandatory stack), the fastest path is a free hosted
+instance — no local Postgres install needed:
+
+1. Create a free project at https://neon.tech
+2. Copy the connection string it gives you
+3. In `backend/.env`, set:
+   ```
+   DATABASE_URL=postgresql://user:password@ep-xxxx.neon.tech/dbname?sslmode=require
+   ```
+4. Restart the backend — SQLAlchemy handles the rest, no code changes needed.
+
 ### 1. Backend
 
 ```bash
@@ -91,8 +105,21 @@ marked as not required for this assignment.
 
 ## Bonus features
 
-Not yet implemented — the current build focuses on the core required
-loop (extract → review → save). If time allows, the next additions would
-be a `duplicate_check` LangGraph node (compare new complaints against
-existing ones by product + batch number) and a `complaint_summary` node
-for the assistant chat box.
+- **Duplicate Complaint Detection** — a third LangGraph node
+  (`check_duplicates`) runs after severity classification. It compares the
+  new complaint's product + batch number against every complaint already in
+  the database (passed in as part of the graph's starting state) and flags
+  `possible_duplicate: true` if a match is found. This is plain Python
+  matching, not an LLM call — exact-match lookups don't need a model, so the
+  node stays fast and deterministic. The frontend shows a red banner on the
+  form when this flag comes back true.
+- **Complaint Q&A chat** — the "Ask me anything about this complaint" box in
+  the AI panel is wired to a real endpoint (`/ask-about-complaint`). It sends
+  the current form state as context to Groq and returns a short, grounded
+  answer — e.g. "what's the likely risk category here?" It's a single LLM
+  call, kept outside the LangGraph pipeline since it's a one-shot Q&A rather
+  than a sequential extraction step.
+
+Not implemented (time-boxed): Complaint Completeness Checker, Root Cause /
+CAPA Recommendation, AI Risk Classification as a separate feature (severity
+classification already covers a version of this).
