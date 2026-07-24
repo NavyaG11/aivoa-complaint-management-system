@@ -340,6 +340,39 @@ textarea.field-input { resize: vertical; font-family: 'Inter', sans-serif; }
   margin-bottom: 18px;
 }
 
+.incomplete-banner {
+  background: #FBF1DF;
+  border: 1px solid #EBD9AF;
+  color: var(--warn);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.insight-card {
+  background: var(--accent-light);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+
+.insight-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
+
+.insight-card p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--ink);
+  line-height: 1.5;
+}
+
 .chat-history {
   margin-top: 14px;
   display: flex;

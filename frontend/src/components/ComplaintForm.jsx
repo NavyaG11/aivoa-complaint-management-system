@@ -132,6 +132,29 @@ export default function ComplaintForm() {
         </div>
       </div>
 
+      {(form.root_cause_suggestion || (form.missing_fields && form.missing_fields.length > 0)) && (
+        <div className="section">
+          <h3>AI Insights</h3>
+          {form.missing_fields && form.missing_fields.length > 0 && (
+            <div className="incomplete-banner">
+              Incomplete report — missing: {form.missing_fields.join(", ")}
+            </div>
+          )}
+          {form.root_cause_suggestion && (
+            <div className="insight-card">
+              <span className="insight-label">Suggested Root Cause</span>
+              <p>{form.root_cause_suggestion}</p>
+            </div>
+          )}
+          {form.capa_recommendation && (
+            <div className="insight-card">
+              <span className="insight-label">CAPA Recommendation</span>
+              <p>{form.capa_recommendation}</p>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="form-actions">
         <button className="btn-secondary" onClick={() => dispatch(formReset())}>
           Reset Form

@@ -103,23 +103,22 @@ marked as not required for this assignment.
   "paste the text" step to keep the AI extraction step reliable within
   the time available.
 
-## Bonus features
+## Bonus features (all implemented as LangGraph nodes, except the chat Q&A)
 
-- **Duplicate Complaint Detection** — a third LangGraph node
-  (`check_duplicates`) runs after severity classification. It compares the
-  new complaint's product + batch number against every complaint already in
-  the database (passed in as part of the graph's starting state) and flags
-  `possible_duplicate: true` if a match is found. This is plain Python
-  matching, not an LLM call — exact-match lookups don't need a model, so the
-  node stays fast and deterministic. The frontend shows a red banner on the
-  form when this flag comes back true.
-- **Complaint Q&A chat** — the "Ask me anything about this complaint" box in
-  the AI panel is wired to a real endpoint (`/ask-about-complaint`). It sends
-  the current form state as context to Groq and returns a short, grounded
-  answer — e.g. "what's the likely risk category here?" It's a single LLM
-  call, kept outside the LangGraph pipeline since it's a one-shot Q&A rather
-  than a sequential extraction step.
+The pipeline is 5 nodes: `extract_fields` → `classify_severity` →
+`check_duplicates` → `check_completeness` → `capa_recommendation`.
 
-Not implemented (time-boxed): Complaint Completeness Checker, Root Cause /
-CAPA Recommendation, AI Risk Classification as a separate feature (severity
-classification already covers a version of this).
+- **Duplicate Complaint Detection** — compares the new complaint's product +
+  batch number against every complaint already in the database. Plain Python
+  matching (not an LLM call) since exact-match lookups don't need a model.
+- **Complaint Completeness Checker** — flags which critical fields
+  (customer name, product, batch number, complaint date, description) came
+  back empty, so QA knows the report needs follow-up before triage. Also
+  plain Python.
+- **Root Cause / CAPA Recommendation** — an LLM call that suggests a
+  plausible root cause and one corrective/preventive action, clearly framed
+  as a speculative suggestion for a human reviewer, not a finding.
+- **Complaint Q&A chat** — the "Ask me anything about this complaint" box
+  in the AI panel, wired to `/ask-about-complaint`. Kept outside the
+  LangGraph pipeline since it's a one-shot Q&A rather than a sequential
+  extraction step.

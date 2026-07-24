@@ -1,13 +1,15 @@
 """
 LangGraph pipeline for the AI Complaint Intake Assistant.
 
-Two nodes, run in sequence:
-  1. extract_fields     -> reads raw complaint text, returns structured fields as JSON
-  2. classify_severity  -> looks at the extracted fields, assigns severity + priority
+Five nodes, run in sequence:
+  1. extract_fields         -> reads raw complaint text, returns structured fields as JSON
+  2. classify_severity      -> looks at the extracted fields, assigns severity + priority
+  3. check_duplicates       -> flags if this product+batch was already reported
+  4. check_completeness     -> flags which critical fields came back empty
+  5. capa_recommendation    -> suggests a likely root cause + corrective/preventive action
 
-This is intentionally simple (a straight line, not a branching graph) so it's
-easy to understand and extend. Add more nodes later (e.g. duplicate_check,
-capa_recommendation) by adding a function + an edge — the pattern is the same.
+Each node reads the shared `state` dict, adds/updates a key, and passes it on.
+Add more nodes later by adding a function + an edge - the pattern is the same.
 """
 import json
 import os
@@ -21,6 +23,8 @@ from langgraph.graph import StateGraph, END
 load_dotenv()
 
 MODEL_NAME = os.getenv("GROQ_MODEL", "gemma2-9b-it")
+
+REQUIRED_FIELDS = ["customer_name", "product_name", "batch_number", "complaint_date", "description"]
 
 
 class ComplaintState(TypedDict):
@@ -145,15 +149,73 @@ def check_duplicates(state: ComplaintState) -> ComplaintState:
     return {**state, "extracted": merged}
 
 
+def check_completeness(state: ComplaintState) -> ComplaintState:
+    """Bonus feature: flags which critical fields came back empty, so QA
+    knows the report needs follow-up before triage. Plain Python again - no
+    LLM needed to check if a string is empty."""
+    if state.get("error") or not state.get("extracted"):
+        return state
+
+    extracted = state["extracted"]
+    missing = [f for f in REQUIRED_FIELDS if not (extracted.get(f) or "").strip()]
+
+    merged = {
+        **extracted,
+        "missing_fields": missing,
+        "is_complete": len(missing) == 0,
+    }
+    return {**state, "extracted": merged}
+
+
+CAPA_PROMPT = """You are a Quality Assurance investigator at a pharmaceutical \
+company reviewing a customer complaint. Based on the details below, suggest:
+- root_cause_suggestion: a plausible root cause in 1 sentence (e.g. "Possible \
+  temperature excursion during transit" or "Packaging line seal defect") -
+  clearly speculative, not a confirmed finding
+- capa_recommendation: one concrete corrective/preventive action in 1 sentence
+
+Complaint details:
+{fields_json}
+
+Return ONLY a JSON object with exactly these two keys: root_cause_suggestion, capa_recommendation."""
+
+
+def capa_recommendation(state: ComplaintState) -> ComplaintState:
+    """Bonus feature: suggests a likely root cause + corrective/preventive
+    action. This DOES need the LLM - unlike the two checks above, "why did
+    this happen and what should we do about it" requires reasoning, not
+    just a lookup."""
+    if state.get("error") or not state.get("extracted"):
+        return state
+    try:
+        llm = _get_llm()
+        prompt = CAPA_PROMPT.format(fields_json=json.dumps(state["extracted"]))
+        response = llm.invoke(prompt)
+        capa_data = _extract_json(response.content)
+        merged = {**state["extracted"], **capa_data}
+        return {**state, "extracted": merged}
+    except Exception:  # noqa: BLE001 - CAPA is a bonus, don't fail the whole pipeline over it
+        merged = {
+            **state["extracted"],
+            "root_cause_suggestion": "Not available",
+            "capa_recommendation": "Not available",
+        }
+        return {**state, "extracted": merged}
+
+
 def build_graph():
     graph = StateGraph(ComplaintState)
     graph.add_node("extract_fields", extract_fields)
     graph.add_node("classify_severity", classify_severity)
     graph.add_node("check_duplicates", check_duplicates)
+    graph.add_node("check_completeness", check_completeness)
+    graph.add_node("capa_recommendation", capa_recommendation)
     graph.set_entry_point("extract_fields")
     graph.add_edge("extract_fields", "classify_severity")
     graph.add_edge("classify_severity", "check_duplicates")
-    graph.add_edge("check_duplicates", END)
+    graph.add_edge("check_duplicates", "check_completeness")
+    graph.add_edge("check_completeness", "capa_recommendation")
+    graph.add_edge("capa_recommendation", END)
     return graph.compile()
 
 

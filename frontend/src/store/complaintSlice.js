@@ -16,6 +16,10 @@ const emptyForm = {
   priority: "",
   possible_duplicate: false,
   duplicate_count: 0,
+  missing_fields: [],
+  is_complete: true,
+  root_cause_suggestion: "",
+  capa_recommendation: "",
 };
 
 const complaintSlice = createSlice({
